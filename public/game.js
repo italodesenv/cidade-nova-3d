@@ -1,367 +1,522 @@
 
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import * as THREE from
+  "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
-const menu = document.getElementById("menu");
-const game = document.getElementById("game");
-const message = document.getElementById("message");
+import { createPlayerProfile } from "./profile.js";
 
-const socket = window.io();
+import {
+  customizeCharacter,
+  createCustomizationMenu
+} from "./customization.js";
 
+import {
+  enableMobileControls
+} from "./mobile-controls.js";
+
+// ESTADO DO JOGO
+let avatar = null;
+let scene = null;
+let camera = null;
+let renderer = null;
+let socket = null;
 let token = "";
 let username = "";
-let scene, camera, renderer, player;
-let droneMode = false;
-let keys = {};
-let remotePlayers = {};
+let creator = false;
+let drone = false;
 
-const clock = new THREE.Clock();
+const remotePlayers = new Map();
+const movement = {
+  forward: false,
+  backward: false,
+  left: false,
+  right: false
+};
 
-function showMessage(text) {
-  message.textContent = text;
+const $ = id => document.getElementById(id);
+
+function showNotice(text) {
+  const notice = $("notice");
+  if (notice) notice.textContent = text;
 }
 
-async function api(path, data = {}) {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
+// COMUNICAÇÃO COM O SERVIDOR
+async function api(url, method = "GET", body = null) {
+  const response = await fetch(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {})
+    },
+    ...(body ? { body: JSON.stringify(body) } : {})
   });
 
-  const result = await response.json();
+  const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(result.error || "Erro na solicitação.");
+    throw new Error(data.error || "Erro no servidor.");
   }
 
-  return result;
+  return data;
 }
 
-document.getElementById("showRegister").onclick = () => {
-  document.getElementById("login").hidden = true;
-  document.getElementById("register").hidden = false;
-  showMessage("");
-};
-
-document.getElementById("showLogin").onclick = () => {
-  document.getElementById("register").hidden = true;
-  document.getElementById("login").hidden = false;
-  showMessage("");
-};
-
-document.getElementById("registerButton").onclick = async () => {
+// LOGIN
+$("login").onclick = async () => {
   try {
-    const result = await api("/api/register", {
-      username: document.getElementById("registerUser").value,
-      password: document.getElementById("registerPass").value
+    const data = await api("/api/login", "POST", {
+      username: $("username").value,
+      password: $("password").value
     });
 
-    showMessage("Conta criada! Agora faça login.");
-    document.getElementById("register").hidden = true;
-    document.getElementById("login").hidden = false;
-  } catch (error) {
-    showMessage(error.message);
-  }
-};
-
-document.getElementById("loginButton").onclick = async () => {
-  try {
-    const result = await api("/api/login", {
-      username: document.getElementById("loginUser").value,
-      password: document.getElementById("loginPass").value
-    });
-
-    token = result.token;
-    username = result.username;
-
-    menu.hidden = true;
-    game.hidden = false;
-
-    document.getElementById("playerName").textContent = username;
+    token = data.token;
+    username = data.username;
+    creator = false;
 
     startGame();
   } catch (error) {
-    showMessage(error.message);
+    $("message").textContent = error.message;
   }
 };
 
-document.getElementById("logoutButton").onclick = () => {
-  socket.disconnect();
-  location.reload();
+// CADASTRO
+$("register").onclick = async () => {
+  try {
+    const data = await api("/api/register", "POST", {
+      username: $("username").value,
+      password: $("password").value
+    });
+
+    token = data.token;
+    username = data.username;
+    creator = false;
+
+    startGame();
+  } catch (error) {
+    $("message").textContent = error.message;
+  }
 };
 
-function makeBuilding(x, z, width, height, depth, color) {
-  const building = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, depth),
-    new THREE.MeshStandardMaterial({ color })
-  );
+// ENTRADA DOS CRIADORES
+async function creatorLogin() {
+  const user = prompt("Usuário oficial:");
+  if (!user) return;
 
-  building.position.set(x, height / 2, z);
-  scene.add(building);
+  const password = prompt("Senha do criador:");
+  if (!password) return;
+
+  try {
+    const data = await api("/api/creator/login", "POST", {
+      username: user,
+      password
+    });
+
+    token = data.token;
+    username = data.username;
+    creator = true;
+
+    startGame();
+  } catch (error) {
+    alert(error.message);
+  }
 }
 
-function createCity() {
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(500, 500),
-    new THREE.MeshStandardMaterial({ color: 0x56a65c })
-  );
+// INICIAR JOGO
+function startGame() {
+  $("menu").hidden = true;
+  $("game").hidden = false;
+  $("playerName").textContent = "@" + username;
 
-  ground.rotation.x = -Math.PI / 2;
-  scene.add(ground);
+  $("creatorButton").hidden = !creator;
 
-  const roadMaterial = new THREE.MeshStandardMaterial({
-    color: 0x333b46
-  });
+  initializeWorld();
+  connectMultiplayer();
+  connectModules();
+  loadHouses();
 
-  for (let i = -100; i <= 100; i += 40) {
-    const road1 = new THREE.Mesh(
-      new THREE.BoxGeometry(14, 0.1, 500),
-      roadMaterial
-    );
+  $("logout").onclick = () => location.reload();
 
-    road1.position.set(i, 0.06, 0);
-    scene.add(road1);
-
-    const road2 = new THREE.Mesh(
-      new THREE.BoxGeometry(500, 0.1, 14),
-      roadMaterial
-    );
-
-    road2.position.set(0, 0.06, i);
-    scene.add(road2);
-  }
-
-  const colors = [
-    0xe9c46a,
-    0xf4a261,
-    0x8ecae6,
-    0xcdb4db,
-    0xffffff
-  ];
-
-  for (let x = -80; x <= 80; x += 40) {
-    for (let z = -80; z <= 80; z += 40) {
-      makeBuilding(
-        x + 10,
-        z + 10,
-        13,
-        9 + Math.random() * 10,
-        13,
-        colors[Math.floor(Math.random() * colors.length)]
-      );
+  $("houseRequest").onclick = async () => {
+    try {
+      const result = await api("/api/house/request", "POST", {});
+      showNotice(result.message);
+    } catch (error) {
+      showNotice(error.message);
     }
-  }
+  };
 
-  // Árvores
-  for (let i = 0; i < 35; i++) {
-    const x = Math.random() * 240 - 120;
-    const z = Math.random() * 240 - 120;
+  $("droneButton").onclick = activateDrone;
 
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.4, 0.5, 3),
-      new THREE.MeshStandardMaterial({ color: 0x75452b })
-    );
+  $("backButton").onclick = returnToPlayer;
 
-    trunk.position.set(x, 1.5, z);
-    scene.add(trunk);
+  $("creatorButton").onclick = () => {
+    $("creatorPanel").hidden = false;
+  };
 
-    const leaves = new THREE.Mesh(
-      new THREE.SphereGeometry(2.2, 12, 12),
-      new THREE.MeshStandardMaterial({ color: 0x168b43 })
-    );
+  $("closeCreator").onclick = () => {
+    $("creatorPanel").hidden = true;
+  };
 
-    leaves.position.set(x, 4, z);
-    scene.add(leaves);
-  }
+  $("placeBuilding").onclick = placeBuilding;
+  $("requestsButton").onclick = showRequests;
+
+  $("jumpButton").onclick = jump;
+  $("upButton").onclick = () => {
+    if (drone) camera.position.y += 2;
+  };
+  $("downButton").onclick = () => {
+    if (drone) camera.position.y = Math.max(2, camera.position.y - 2);
+  };
 }
 
-function createPlayer() {
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.6, 1.2, 4, 8),
-    new THREE.MeshStandardMaterial({ color: 0x2584ee })
-  );
-
-  body.position.y = 1.5;
-  scene.add(body);
-
-  return body;
-}
-
-function createScene() {
+// MUNDO 3D
+function initializeWorld() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x8cc9ed);
+  scene.background = new THREE.Color(0x87ceeb);
 
   camera = new THREE.PerspectiveCamera(
     70,
-    1,
+    innerWidth / innerHeight,
     0.1,
     1000
   );
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
 
-  document.getElementById("gameCanvas").appendChild(renderer.domElement);
+  $("gameCanvas").innerHTML = "";
+  $("gameCanvas").appendChild(renderer.domElement);
 
-  const sunlight = new THREE.DirectionalLight(0xffffff, 2);
-  sunlight.position.set(30, 60, 30);
-  scene.add(sunlight);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x52634b, 2));
 
-  scene.add(new THREE.AmbientLight(0xffffff, 1));
+  const sun = new THREE.DirectionalLight(0xffffff, 2);
+  sun.position.set(40, 80, 20);
+  scene.add(sun);
 
-  createCity();
-  player = createPlayer();
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(500, 500),
+    new THREE.MeshStandardMaterial({ color: 0x4d9c57 })
+  );
 
-  resize();
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+
+  createRoads();
+  createAvatar();
+
+  camera.position.set(0, 5, 9);
+
   window.addEventListener("resize", resize);
+
+  animate();
 }
 
-function resize() {
-  if (!renderer || !camera) return;
+function createRoads() {
+  for (let i = -4; i <= 4; i++) {
+    addBox(8, 0.08, 200, 0x353b42, i * 25, 0, 0);
+    addBox(200, 0.08, 8, 0x353b42, 0, 0, i * 25);
+  }
 
-  const container = document.getElementById("gameCanvas");
+  for (let x = -3; x <= 3; x++) {
+    for (let z = -3; z <= 3; z++) {
+      if (Math.abs(x) < 1 && Math.abs(z) < 1) continue;
 
-  const width = container.clientWidth;
-  const height = container.clientHeight;
+      const height = 5 + Math.random() * 12;
 
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
+      addBox(
+        9,
+        height,
+        9,
+        0xb9c3ce,
+        x * 25 + 8,
+        height / 2,
+        z * 25 + 8
+      );
+    }
+  }
+}
 
-  renderer.setSize(width, height);
+function addBox(w, h, d, color, x, y, z) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color })
+  );
+
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  return mesh;
+}
+
+// PERSONAGEM
+function createAvatar() {
+  avatar = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.45, 0.9, 4, 8),
+    new THREE.MeshStandardMaterial({ color: 0x2463eb })
+  );
+
+  body.position.y = 1;
+  avatar.add(body);
+
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 16, 16),
+    new THREE.MeshStandardMaterial({ color: 0xffd1a4 })
+  );
+
+  head.position.y = 1.9;
+  avatar.add(head);
+
+  scene.add(avatar);
+}
+
+// CONECTAR MÓDULOS
+function connectModules() {
+  enableMobileControls(state => {
+    Object.assign(movement, state);
+  });
+
+  createCustomizationMenu(color => {
+    customizeCharacter(avatar, color);
+  });
+
+  $("playerName").onclick = () => {
+    createPlayerProfile({
+      username,
+      hasHouse: false
+    });
+  };
+}
+
+// MOVIMENTAÇÃO
+function jump() {
+  if (drone) return;
+  avatar.position.y = 1.5;
+
+  setTimeout(() => {
+    if (avatar && !drone) avatar.position.y = 0;
+  }, 500);
+}
+
+function activateDrone() {
+  drone = true;
+  $("backButton").hidden = false;
+  showNotice("Modo drone ativado.");
+}
+
+function returnToPlayer() {
+  drone = false;
+  $("backButton").hidden = true;
+  showNotice("Você voltou ao personagem.");
 }
 
 function animate() {
   requestAnimationFrame(animate);
 
-  if (!player) return;
+  if (!scene || !renderer) return;
 
-  const delta = Math.min(clock.getDelta(), 0.05);
-  const speed = 12 * delta;
+  if (!drone && avatar) {
+    const speed = 0.18;
 
-  if (!droneMode) {
-    if (keys.forward) player.position.z -= speed;
-    if (keys.backward) player.position.z += speed;
-    if (keys.left) player.position.x -= speed;
-    if (keys.right) player.position.x += speed;
+    if (movement.forward) avatar.position.z -= speed;
+    if (movement.backward) avatar.position.z += speed;
+    if (movement.left) avatar.position.x -= speed;
+    if (movement.right) avatar.position.x += speed;
 
-    camera.position.set(
-      player.position.x,
-      player.position.y + 6,
-      player.position.z + 10
+    camera.position.lerp(
+      new THREE.Vector3(
+        avatar.position.x,
+        avatar.position.y + 5,
+        avatar.position.z + 9
+      ),
+      0.08
     );
 
     camera.lookAt(
-      player.position.x,
-      player.position.y,
-      player.position.z
+      avatar.position.x,
+      avatar.position.y + 1,
+      avatar.position.z
     );
+
+    if (socket && socket.connected) {
+      socket.emit("move", {
+        x: avatar.position.x,
+        z: avatar.position.z
+      });
+    }
   }
 
   renderer.render(scene, camera);
-
-  if (socket.connected) {
-    socket.emit("move", {
-      x: player.position.x,
-      y: player.position.y,
-      z: player.position.z
-    });
-  }
 }
 
-function startGame() {
-  createScene();
-
-  socket.connect();
-
-  socket.on("connect", () => {
-    socket.emit("join", { username });
+// MULTIPLAYER
+function connectMultiplayer() {
+  socket = window.io({
+    auth: { token }
   });
 
   socket.on("players", players => {
-    Object.entries(players).forEach(([id, data]) => {
-      if (id !== socket.id) addRemotePlayer(id, data);
-    });
+    players.forEach(addRemotePlayer);
+    updateOnline();
   });
 
-  socket.on("playerJoined", data => {
-    addRemotePlayer(data.id, data);
-  });
+  socket.on("player-joined", addRemotePlayer);
 
-  socket.on("playerMoved", data => {
-    const remote = remotePlayers[data.id];
+  socket.on("player-moved", player => {
+    const mesh = remotePlayers.get(player.id);
 
-    if (remote) {
-      remote.position.set(data.x, data.y + 1.5, data.z);
+    if (mesh) {
+      mesh.position.set(player.x, 1, player.z);
     }
   });
 
-  socket.on("playerLeft", id => {
-    if (remotePlayers[id]) {
-      scene.remove(remotePlayers[id]);
-      delete remotePlayers[id];
-    }
+  socket.on("player-left", id => {
+    const mesh = remotePlayers.get(id);
+
+    if (mesh) scene.remove(mesh);
+
+    remotePlayers.delete(id);
+    updateOnline();
   });
 
-  animate();
+  socket.on("connect_error", () => {
+    showNotice("Erro ao conectar ao multiplayer.");
+  });
 }
 
-function addRemotePlayer(id, data) {
-  if (remotePlayers[id]) return;
+function addRemotePlayer(player) {
+  if (!player || player.id === socket.id) return;
+  if (remotePlayers.has(player.id)) return;
 
-  const avatar = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.6, 1.2, 4, 8),
-    new THREE.MeshStandardMaterial({ color: 0xe64b69 })
+  const mesh = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.45, 0.9, 4, 8),
+    new THREE.MeshStandardMaterial({ color: 0xe74c3c })
   );
 
-  avatar.position.set(data.x, 1.5, data.z);
-  scene.add(avatar);
+  mesh.position.set(player.x, 1, player.z);
+  scene.add(mesh);
+  remotePlayers.set(player.id, mesh);
 
-  remotePlayers[id] = avatar;
+  updateOnline();
 }
 
-// Controles do celular
-document.querySelectorAll("[data-move]").forEach(button => {
-  const direction = button.dataset.move;
+function updateOnline() {
+  $("online").textContent =
+    (remotePlayers.size + 1) + " online";
+}
 
-  button.addEventListener("pointerdown", event => {
-    event.preventDefault();
-    keys[direction] = true;
-  });
+// CASAS
+async function loadHouses() {
+  try {
+    const houses = await api("/api/houses");
 
-  button.addEventListener("pointerup", () => {
-    keys[direction] = false;
-  });
-
-  button.addEventListener("pointerleave", () => {
-    keys[direction] = false;
-  });
-
-  button.addEventListener("pointercancel", () => {
-    keys[direction] = false;
-  });
-});
-
-// Pular
-document.getElementById("jumpButton").onclick = () => {
-  if (player && !droneMode) {
-    player.position.y = 2.5;
-
-    setTimeout(() => {
-      if (player) player.position.y = 0;
-    }, 500);
+    houses.forEach(house => {
+      createHouse(house.x, house.z, house.username);
+    });
+  } catch (error) {
+    showNotice(error.message);
   }
-};
+}
 
-// Câmera drone inicial
-document.getElementById("droneButton").onclick = () => {
-  droneMode = !droneMode;
+function createHouse(x, z, name) {
+  const house = new THREE.Group();
 
-  if (droneMode && player) {
-    camera.position.set(
-      player.position.x,
-      player.position.y + 35,
-      player.position.z + 35
-    );
+  const base = new THREE.Mesh(
+    new THREE.BoxGeometry(7, 4, 7),
+    new THREE.MeshStandardMaterial({ color: 0xe5c59a })
+  );
 
-    camera.lookAt(player.position);
+  base.position.y = 2;
+  house.add(base);
+
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(5, 3, 4),
+    new THREE.MeshStandardMaterial({ color: 0x9d3434 })
+  );
+
+  roof.position.y = 5;
+  house.add(roof);
+
+  house.position.set(x, 0, z);
+  scene.add(house);
+
+  const label = document.createElement("div");
+  label.textContent = "@" + name;
+  label.className = "house-label";
+  label.style.position = "absolute";
+  label.style.color = "white";
+  label.style.pointerEvents = "none";
+
+  $("gameCanvas").appendChild(label);
+}
+
+// CONSTRUÇÃO
+async function placeBuilding() {
+  if (!creator) return;
+
+  try {
+    const result = await api("/api/creator/build", "POST", {
+      kind: $("buildKind").value,
+      x: avatar.position.x + 5,
+      z: avatar.position.z + 5
+    });
+
+    showNotice(result.message);
+  } catch (error) {
+    showNotice(error.message);
   }
-};
+}
+
+// APROVAÇÃO DE CASAS
+async function showRequests() {
+  if (!creator) return;
+
+  try {
+    const requests = await api("/api/creator/requests");
+    const list = $("requestsList");
+
+    list.replaceChildren();
+
+    requests.forEach(request => {
+      const row = document.createElement("div");
+      const label = document.createElement("span");
+      const button = document.createElement("button");
+
+      label.textContent = "@" + request.username;
+      button.textContent = "Aprovar";
+
+      button.onclick = async () => {
+        try {
+          await api(
+            "/api/creator/requests/" + request.id + "/approve",
+            "POST",
+            {}
+          );
+
+          row.remove();
+          loadHouses();
+          showNotice("Casa aprovada!");
+        } catch (error) {
+          showNotice(error.message);
+        }
+      };
+
+      row.append(label, button);
+      list.appendChild(row);
+    });
+
+    if (!requests.length) {
+      list.textContent = "Nenhum pedido pendente.";
+    }
+  } catch (error) {
+    showNotice(error.message);
+  }
+}
+
+// TELA
+function resize() {
+  if (!camera || !renderer) return;
+
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
