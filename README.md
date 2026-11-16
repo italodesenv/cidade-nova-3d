@@ -12,17 +12,17 @@ O objetivo é criar uma cidade virtual viva, com casas, ruas, avenidas, lojas, p
 
 ✨ Funcionalidades planejadas
 
-- 🌍 Cidade 3D explorável.
-- 👥 Multiplayer com jogadores em tempo real.
-- 🏠 Casas próprias para os jogadores.
-- 🪧 Placa com nome de usuário acima das casas.
-- 👤 Perfis individuais.
-- 🎨 Personalização de personagens.
-- 🕹️ Controles adaptados para celular.
-- 🚁 Modo câmera drone.
-- 🌳 Árvores, parques, lojas e construções.
-- 💾 Cadastro, login e salvamento de dados.
-- 🛠️ Ferramentas exclusivas de construção para os criadores oficiais.
+# - 🌍 Cidade 3D explorável.
+# - 👥 Multiplayer com jogadores em tempo real.
+# - 🏠 Casas próprias para os jogadores.
+# - 🪧 Placa com nome de usuário acima das casas.
+# - 👤 Perfis individuais.
+# - 🎨 Personalização de personagens.
+# - 🕹️ Controles adaptados para celular.
+# - 🚁 Modo câmera livre.
+# - 🌳 Árvores, parques, lojas e construções.
+# - 💾 Cadastro, login e salvamento de dados.
+# - 🛠️ Ferramentas exclusivas de construção para os criadores oficiais.
 
 🕹️ Controles previstos
 
