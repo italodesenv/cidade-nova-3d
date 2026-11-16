@@ -1,0 +1,185 @@
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #101827;
+  color: white;
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.topbar {
+  background: #17243a;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.topbar h1 {
+  font-size: 21px;
+}
+
+#online {
+  color: #62e6a0;
+  font-size: 13px;
+}
+
+main {
+  padding: 18px;
+  max-width: 1000px;
+  margin: auto;
+}
+
+.panel {
+  background: #1c2b43;
+  padding: 25px;
+  border-radius: 18px;
+  max-width: 430px;
+  margin: 35px auto;
+  text-align: center;
+  box-shadow: 0 8px 30px #0005;
+}
+
+.panel h2 {
+  margin-bottom: 12px;
+}
+
+.panel p {
+  color: #c5d0df;
+  margin: 12px 0;
+}
+
+input {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  margin: 12px 0;
+  border: 1px solid #40516b;
+  border-radius: 9px;
+  background: #101827;
+  color: white;
+  font-size: 16px;
+}
+
+button {
+  border: 0;
+  padding: 13px 18px;
+  border-radius: 9px;
+  background: #2584ee;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  margin: 5px;
+}
+
+button:active {
+  transform: scale(.96);
+}
+
+.secondary {
+  background: #43536b;
+}
+
+#message {
+  color: #ffcf70;
+}
+
+#game {
+  position: relative;
+}
+
+#gameCanvas {
+  width: 100%;
+  height: 65vh;
+  min-height: 400px;
+  overflow: hidden;
+  background: #8cc9ed;
+  border-radius: 15px;
+}
+
+#gameCanvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.game-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+}
+
+#playerName {
+  font-weight: bold;
+  color: #7ee7ae;
+}
+
+.controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.movement {
+  text-align: center;
+}
+
+.movement button {
+  width: 55px;
+  height: 50px;
+  font-size: 19px;
+  background: #344c6b;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.actions button {
+  background: #188c68;
+}
+
+footer {
+  text-align: center;
+  padding: 20px;
+  color: #8292a8;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  main {
+    padding: 10px;
+  }
+
+  .panel {
+    padding: 18px;
+    margin-top: 20px;
+  }
+
+  #gameCanvas {
+    height: 58vh;
+    min-height: 350px;
+  }
+
+  .controls {
+    align-items: center;
+  }
+}
