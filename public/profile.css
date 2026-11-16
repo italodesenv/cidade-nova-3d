@@ -1,0 +1,21 @@
+
+.profile-card,
+.customization-panel {
+  position: absolute;
+  z-index: 10;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90%, 320px);
+  padding: 18px;
+  border-radius: 14px;
+  background: #101827f2;
+  color: white;
+  text-align: center;
+}
+
+.profile-card button,
+.customization-panel button {
+  margin: 5px;
+  min-width: 40px;
+}
