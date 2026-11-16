@@ -1,0 +1,79 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101827">
+  <title>Cidade Nova 3D</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+
+    <header class="topbar">
+      <h1>🏙️ Cidade Nova 3D</h1>
+      <span id="online">0 jogadores online</span>
+    </header>
+
+    <main>
+      <section id="menu" class="panel">
+        <h2>Bem-vindo à Cidade Nova!</h2>
+        <p>Entre para explorar uma cidade cheia de possibilidades.</p>
+
+        <div id="login">
+          <h3>Entrar na cidade</h3>
+          <input id="loginUser" placeholder="@seuusuario">
+          <input id="loginPass" type="password" placeholder="Sua senha">
+          <button id="loginButton">Entrar</button>
+          <p>Não tem conta?</p>
+          <button id="showRegister" class="secondary">Criar conta</button>
+        </div>
+
+        <div id="register" hidden>
+          <h3>Criar conta</h3>
+          <input id="registerUser" placeholder="@seuusuario">
+          <input id="registerPass" type="password" placeholder="Crie uma senha">
+          <button id="registerButton">Cadastrar</button>
+          <button id="showLogin" class="secondary">Voltar</button>
+        </div>
+
+        <p id="message"></p>
+      </section>
+
+      <section id="game" hidden>
+        <div id="gameCanvas"></div>
+
+        <div class="game-info">
+          <span id="playerName">@jogador</span>
+          <button id="logoutButton">Sair</button>
+        </div>
+
+        <div class="controls">
+          <div class="movement">
+            <button data-move="forward">⬆️</button>
+            <div>
+              <button data-move="left">⬅️</button>
+              <button data-move="backward">⬇️</button>
+              <button data-move="right">➡️</button>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="jumpButton">Pular</button>
+            <button id="droneButton">🚁 Drone</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>© Cidade Nova 3D</p>
+    </footer>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
